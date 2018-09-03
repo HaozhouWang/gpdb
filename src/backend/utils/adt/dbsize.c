@@ -35,6 +35,7 @@
 #include "utils/int8.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
+#include "utils/dbsize.h"
 #include "utils/numeric.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -1056,4 +1057,29 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	path = relpathbackend(rnode, backend, MAIN_FORKNUM);
 
 	PG_RETURN_TEXT_P(cstring_to_text(path));
+}
+
+int64 calculate_total_relation_size_by_oid(Oid relOid)
+{
+	Relation	rel;
+	int64		size;
+
+	rel = try_relation_open(relOid, AccessShareLock);
+
+	if (rel == NULL)
+		return 0;
+
+	size = calculate_total_relation_size(rel);
+
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		char	   *sql;
+
+		sql = psprintf("select pg_catalog.pg_table_size(%u)", relOid);
+
+		size += get_size_from_segDBs(sql);
+	}
+
+	relation_close(rel, AccessShareLock);
+	return size;
 }

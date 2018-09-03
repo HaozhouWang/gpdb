@@ -70,6 +70,7 @@
 #include "miscadmin.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"
+#include "postmaster/diskquota.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
 #include "tcop/utility.h"
@@ -1360,6 +1361,11 @@ ExecCheckRTPerms(List *rangeTable, bool ereport_on_violation)
 			if (ereport_on_violation)
 				aclcheck_error(ACLCHECK_NO_PRIV, ACL_KIND_CLASS,
 							   get_rel_name(rte->relid));
+			return false;
+		}
+
+		if (!CheckTableQuota(rte))
+		{
 			return false;
 		}
 	}

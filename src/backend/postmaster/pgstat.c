@@ -47,6 +47,7 @@
 #include "miscadmin.h"
 #include "pg_trace.h"
 #include "postmaster/autovacuum.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/fork_process.h"
 #include "postmaster/postmaster.h"
 #include "storage/backendid.h"
@@ -2917,7 +2918,6 @@ pgstat_read_current_status(void)
 	localBackendStatusTable = localtable;
 }
 
-
 /* ----------
  * pgstat_get_backend_current_activity() -
  *
@@ -3064,7 +3064,6 @@ pgstat_get_crashed_backend_activity(int pid, char *buffer, int buflen)
 	/* PID not found */
 	return NULL;
 }
-
 
 /* ------------------------------------------------------------
  * Local support functions follow

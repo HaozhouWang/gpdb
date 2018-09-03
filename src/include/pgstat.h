@@ -687,7 +687,6 @@ typedef struct PgStat_GlobalStats
 	TimestampTz stat_reset_timestamp;
 } PgStat_GlobalStats;
 
-
 /* ----------
  * Backend states
  * ----------

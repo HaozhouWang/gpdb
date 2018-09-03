@@ -43,6 +43,7 @@
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
 #include "storage/backendid.h"
@@ -326,9 +327,9 @@ CheckMyDatabase(const char *name, bool am_superuser)
 	 * a way to recover from disabling all access to all databases, for
 	 * example "UPDATE pg_database SET datallowconn = false;".
 	 *
-	 * We do not enforce them for autovacuum worker processes either.
+	 * We do not enforce them for autovacuum/diskquota worker processes either.
 	 */
-	if (IsUnderPostmaster && !IsAutoVacuumWorkerProcess())
+	if (IsUnderPostmaster && !IsAutoVacuumWorkerProcess() && !IsDiskQuotaWorkerProcess())
 	{
 		/*
 		 * Check that the database is currently allowing connections.
@@ -511,8 +512,8 @@ InitializeMaxBackends(void)
 {
 	Assert(MaxBackends == 0);
 
-	/* the extra unit accounts for the autovacuum launcher */
-	MaxBackends = MaxConnections + autovacuum_max_workers + 1 +
+	/* the extra unit accounts for the autovacuum launcher and diskquota launcher */
+	MaxBackends = MaxConnections + autovacuum_max_workers + 2 + diskquota_max_workers
 		GetNumShmemAttachedBgworkers();
 
 	/* internal error because the values were all checked previously */
@@ -703,8 +704,8 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 */
 	on_shmem_exit(ShutdownPostgres, 0);
 
-	/* The autovacuum launcher is done here */
-	if (IsAutoVacuumLauncherProcess())
+	/* The autovacuum launcher and diskquota launcher is done here */
+	if (IsAutoVacuumLauncherProcess() || IsDiskQuotaLauncherProcess())
 		return;
 
 	/*
@@ -741,10 +742,10 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * Perform client authentication if necessary, then figure out our
 	 * postgres user ID, and see if we are a superuser.
 	 *
-	 * In standalone mode and in autovacuum worker processes, we use a fixed
+	 * In standalone mode and in autovacuum/diskquota worker processes, we use a fixed
 	 * ID, otherwise we figure it out from the authenticated user name.
 	 */
-	if (bootstrap || IsAutoVacuumWorkerProcess())
+	if (bootstrap || IsAutoVacuumWorkerProcess() || IsDiskQuotaWorkerProcess())
 	{
 		InitializeSessionUserIdStandalone();
 		am_superuser = true;

@@ -33,6 +33,9 @@ typedef enum
 
 	PMSIGNAL_WAKEN_FTS,         /* wake up FTS to probe segments */
 
+	PMSIGNAL_START_DISKQUOTA_LAUNCHER,    /* start an diskquota launcher */
+	PMSIGNAL_START_DISKQUOTA_WORKER,  /* start an diskquota worker */
+
 	NUM_PMSIGNALS				/* Must be last value of enum! */
 } PMSignalReason;
 

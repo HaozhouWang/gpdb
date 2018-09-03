@@ -36,6 +36,7 @@
 #include "miscadmin.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/startup.h"
 #include "replication/walsender.h"
@@ -535,10 +536,10 @@ InitializeSessionUserIdStandalone(void)
 {
 	/*
 	 * This function should only be called in single-user mode, in autovacuum
-	 * workers, and in background workers.
+	 * workers, disk quota workers and in background workers.
 	 */
 	AssertState(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker
-				|| am_startup || (am_ftshandler && am_mirror));
+				|| IsDiskQuotaWorkerProcess() || am_startup || (am_ftshandler && am_mirror));
 
 	/* call only once */
 	AssertState(!OidIsValid(AuthenticatedUserId));

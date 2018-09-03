@@ -1828,6 +1828,26 @@ _equalAlterExtensionContentsStmt(const AlterExtensionContentsStmt *a, const Alte
 }
 
 static bool
+_equalCreateDiskQuotaStmt(const CreateDiskQuotaStmt *a, const CreateDiskQuotaStmt *b)
+{
+	COMPARE_STRING_FIELD(quotaname);
+	COMPARE_SCALAR_FIELD(dbobjtype);
+	COMPARE_STRING_FIELD(objname);
+	COMPARE_NODE_FIELD(options);
+
+	return true;
+}
+
+static bool
+_equalDropDiskQuotaStmt(const DropDiskQuotaStmt *a, const DropDiskQuotaStmt *b)
+{
+	COMPARE_STRING_FIELD(quotaname);
+	COMPARE_SCALAR_FIELD(missing_ok);
+
+	return true;
+}
+
+static bool
 _equalCreateFdwStmt(const CreateFdwStmt *a, const CreateFdwStmt *b)
 {
 	COMPARE_STRING_FIELD(fdwname);
@@ -3183,6 +3203,12 @@ equal(const void *a, const void *b)
 			break;
 		case T_AlterExtensionContentsStmt:
 			retval = _equalAlterExtensionContentsStmt(a, b);
+			break;
+		case T_CreateDiskQuotaStmt:
+			retval = _equalCreateDiskQuotaStmt(a, b);
+			break;
+		case T_DropDiskQuotaStmt:
+			retval = _equalDropDiskQuotaStmt(a, b);
 			break;
 		case T_CreateFdwStmt:
 			retval = _equalCreateFdwStmt(a, b);
