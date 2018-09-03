@@ -238,6 +238,7 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 		CreateDomainStmt CreateExtensionStmt CreateGroupStmt CreateOpClassStmt
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateTableSpaceStmt
+		CreateDiskQuotaStmt DropDiskQuotaStmt
 		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
 		CreateAssertStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
@@ -392,6 +393,10 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 				columnListUnique
 
 %type <node>    table_value_select_clause
+
+%type <list>    quota_option_list
+%type <str>     obj_name
+%type <defelt>  quota_option_elem
 
 %type <list>	opt_fdw_options fdw_options
 %type <defelt>	fdw_option
@@ -622,7 +627,7 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 
 	DATA_P DATABASE DAY_P DEALLOCATE DEC DECIMAL_P DECLARE DEFAULT DEFAULTS
 	DEFERRABLE DEFERRED DEFINER DELETE_P DELIMITER DELIMITERS DESC
-	DICTIONARY DISABLE_P DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P DOUBLE_P DROP
+	DICTIONARY DISABLE_P DISCARD DISK DISTINCT DO DOCUMENT_P DOMAIN_P DOUBLE_P DROP
 
 	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EVENT EXCEPT
 	EXCLUDE EXCLUDING EXCLUSIVE EXECUTE EXISTS EXPLAIN
@@ -662,7 +667,7 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 	PRECEDING PRECISION PRESERVE PREPARE PREPARED PRIMARY
 	PRIOR PRIVILEGES PROCEDURAL PROCEDURE PROGRAM
 
-	QUOTE
+	QUOTA QUOTE
 
 	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF REFERENCES REFRESH REINDEX
 	RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA
@@ -1190,6 +1195,7 @@ stmt :
 			| CreateAssertStmt
 			| CreateCastStmt
 			| CreateConversionStmt
+			| CreateDiskQuotaStmt
 			| CreateDomainStmt
 			| CreateExtensionStmt
 			| CreateExternalStmt
@@ -1223,6 +1229,7 @@ stmt :
 			| DoStmt
 			| DropAssertStmt
 			| DropCastStmt
+			| DropDiskQuotaStmt
 			| DropFdwStmt
 			| DropForeignServerStmt
 			| DropGroupStmt
@@ -6169,6 +6176,84 @@ AlterExtensionContentsStmt:
 					$$ = (Node *)n;
 				}
 		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE DISK QUOTA name ON obj_type obj_name WITH options_list
+ *
+ *****************************************************************************/
+
+CreateDiskQuotaStmt: CREATE DISK QUOTA name ON TABLE qualified_name opt_with '(' quota_option_list ')'
+					{
+						 CreateDiskQuotaStmt *n = makeNode(CreateDiskQuotaStmt);
+						 n->quotaname = $4;
+						 n->dbobjtype = DISK_QUOTA_TABLE;
+						 n->table = $7;
+						 n->objname = NULL;
+						 n->options = $10;
+						 $$ = (Node *)n;
+					}
+					|  CREATE DISK QUOTA name ON SCHEMA obj_name opt_with '(' quota_option_list ')'
+					{
+						CreateDiskQuotaStmt *n = makeNode(CreateDiskQuotaStmt);
+						n->quotaname = $4;
+						n->dbobjtype = DISK_QUOTA_SCHEMA;
+						n->table = NULL;
+						n->objname = $7;
+						n->options = $10;
+						$$ = (Node *)n;
+					}
+					|  CREATE DISK QUOTA name ON USER obj_name opt_with '(' quota_option_list ')'
+					{
+						CreateDiskQuotaStmt *n = makeNode(CreateDiskQuotaStmt);
+						n->quotaname = $4;
+						n->dbobjtype = DISK_QUOTA_USER;
+						n->table = NULL;
+						n->objname = $7;
+						n->options = $10;
+						$$ = (Node *)n;
+					}
+			;
+
+obj_name:
+		ColLabel                              { $$ = $1; }
+	;
+
+quota_option_elem:
+		ColLabel '=' Sconst
+		{
+			$$ = makeDefElem($1, (Node *)makeString($3));
+		}
+	;
+
+quota_option_list:
+		quota_option_elem                               { $$ = list_make1($1); }
+		| quota_option_list ',' quota_option_elem       { $$ = lappend($1, $3); }
+	;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             DROP DISK QUOTA name
+ *
+ *****************************************************************************/
+
+DropDiskQuotaStmt: DROP DISK QUOTA name
+					{
+						DropDiskQuotaStmt *n = makeNode(DropDiskQuotaStmt);
+						n->quotaname = $4;
+						n->missing_ok = false;
+						$$ = (Node *) n;
+					}
+					|  DROP DISK QUOTA IF_P EXISTS name
+					{
+						DropDiskQuotaStmt *n = makeNode(DropDiskQuotaStmt);
+						n->quotaname = $6;
+						n->missing_ok = true;
+						$$ = (Node *) n;
+					}
+	;
 
 /*****************************************************************************
  *
@@ -15560,6 +15645,7 @@ unreserved_keyword:
 			| DICTIONARY
 			| DISABLE_P
 			| DISCARD
+			| DISK
 			| DOCUMENT_P
 			| DOMAIN_P
 			| DOUBLE_P
@@ -15690,6 +15776,7 @@ unreserved_keyword:
 			| PROGRAM
 			| PROTOCOL
 			| QUEUE
+			| QUOTA
 			| QUOTE
 			| RANDOMLY /* gp */
 			| RANGE

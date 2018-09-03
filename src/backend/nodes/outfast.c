@@ -735,6 +735,25 @@ _outCreateForeignTableStmt(StringInfo str, CreateForeignTableStmt *node)
 }
 
 static void
+_outCreateDiskQuotaStmt(StringInfo str, CreateDiskQuotaStmt *node)
+{
+    WRITE_NODE_TYPE("CREATEDISKQUOTASTMT");
+    WRITE_STRING_FIELD(quotaname);
+    WRITE_ENUM_FIELD(dbobjtype, DiskQuotaDBObjectType);
+    WRITE_NODE_FIELD(table);
+    WRITE_STRING_FIELD(objname);
+    WRITE_NODE_FIELD(options);
+}
+
+static void
+_outDropDiskQuotaStmt(StringInfo str, DropDiskQuotaStmt *node)
+{
+    WRITE_NODE_TYPE("DROPDISKQUOTASTMT");
+    WRITE_STRING_FIELD(quotaname);
+    WRITE_BOOL_FIELD(missing_ok);
+}
+
+static void
 _outPartitionSpec(StringInfo str, PartitionSpec *node)
 {
 	WRITE_NODE_TYPE("PARTITIONSPEC");
@@ -2220,6 +2239,12 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AlterTableSpaceOptionsStmt:
 				_outAlterTableSpaceOptionsStmt(str, obj);
+				break;
+			case T_CreateDiskQuotaStmt:
+				_outCreateDiskQuotaStmt(str, obj);
+				break;
+			case T_DropDiskQuotaStmt:
+				_outDropDiskQuotaStmt(str, obj);
 				break;
 			default:
 				elog(ERROR, "could not serialize unrecognized node type: %d",

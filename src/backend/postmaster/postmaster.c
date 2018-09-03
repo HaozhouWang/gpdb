@@ -113,6 +113,7 @@
 #include "postmaster/autovacuum.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/bgwriter.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/fork_process.h"
 #include "postmaster/pgarch.h"
 #include "postmaster/postmaster.h"
@@ -163,9 +164,10 @@ bool pm_launch_walreceiver = false;
 #define BACKEND_TYPE_AUTOVAC	0x0002	/* autovacuum worker process */
 #define BACKEND_TYPE_WALSND		0x0004	/* walsender process */
 #define BACKEND_TYPE_BGWORKER	0x0008	/* bgworker process */
-#define BACKEND_TYPE_ALL		0x000F	/* OR of all the above */
+#define BACKEND_TYPE_DISKQUOTA  0x000F  /* diskquota process */
+#define BACKEND_TYPE_ALL		0x0010	/* OR of all the above */
 
-#define BACKEND_TYPE_WORKER		(BACKEND_TYPE_AUTOVAC | BACKEND_TYPE_BGWORKER)
+#define BACKEND_TYPE_WORKER		(BACKEND_TYPE_DISKQUOTA | BACKEND_TYPE_AUTOVAC | BACKEND_TYPE_BGWORKER)
 
 /*
  * List of active backends (or child processes anyway; we don't actually
@@ -313,7 +315,8 @@ static pid_t StartupPID = 0,
 			AutoVacPID = 0,
 			PgArchPID = 0,
 			PgStatPID = 0,
-			SysLoggerPID = 0;
+			SysLoggerPID = 0,
+			DiskQuotaPID = 0;
 
 /* Startup/shutdown state */
 #define			NoShutdown		0
@@ -451,6 +454,12 @@ static volatile sig_atomic_t start_autovac_launcher = false;
 /* the launcher needs to be signalled to communicate some condition */
 static volatile bool avlauncher_needs_signal = false;
 
+/* received START_DISK_QUOTA_LAUNCHER signal */
+static volatile sig_atomic_t start_diskquota_launcher = false;
+
+/* the launcher needs to be signalled to communicate some condition */
+static volatile bool dqlauncher_needs_signal = false;
+
 /* set when there's a worker that needs to be started up */
 static volatile bool StartWorkerNeeded = true;
 static volatile bool HaveCrashedWorker = false;
@@ -537,6 +546,7 @@ static void StartOneBackgroundWorker(void);
 static bool CreateOptsFile(int argc, char *argv[], char *fullprogname);
 static pid_t StartChildProcess(AuxProcType type);
 static void StartAutovacuumWorker(void);
+static void StartDiskquotaWorker(void);
 static void InitPostmasterDeathWatchHandle(void);
 
 static void setProcAffinity(int id);
@@ -1431,6 +1441,11 @@ PostmasterMain(int argc, char *argv[])
 	autovac_init();
 
 	/*
+	 * Initialize the diskquota subsystem (again, no process start yet)
+	 */
+	diskquota_init();
+
+	/*
 	 * Load configuration files for client authentication.
 	 */
 	if (!load_hba())
@@ -1927,6 +1942,16 @@ ServerLoop(void)
 				start_autovac_launcher = false; /* signal processed */
 		}
 
+		/* If we have lost the disk quota launcher, try to start a new one */
+		if (DiskQuotaPID == 0 && Gp_entry_postmaster &&
+			(DiskQuotaingActive() || start_diskquota_launcher) &&
+			pmState == PM_RUN)
+		{
+			DiskQuotaPID = StartDiskQuotaLauncher();
+			if (DiskQuotaPID != 0)
+				start_diskquota_launcher = false; /* signal processed */
+		}
+
 		/* If we have lost the stats collector, try to start a new one */
 		if (PgStatPID == 0 && pmState == PM_RUN)
 			PgStatPID = pgstat_start();
@@ -1954,6 +1979,14 @@ ServerLoop(void)
 			avlauncher_needs_signal = false;
 			if (AutoVacPID != 0)
 				kill(AutoVacPID, SIGUSR2);
+		}
+
+		/* If we need to signal the diskquota launcher, do so now */
+		if (dqlauncher_needs_signal && Gp_entry_postmaster)
+		{
+			dqlauncher_needs_signal = false;
+			if (DiskQuotaPID != 0)
+				kill(DiskQuotaPID, SIGUSR2);
 		}
 
 		/* Get other worker processes running, if needed */
@@ -2757,6 +2790,8 @@ SIGHUP_handler(SIGNAL_ARGS)
 			signal_child(WalReceiverPID, SIGHUP);
 		if (AutoVacPID != 0)
 			signal_child(AutoVacPID, SIGHUP);
+		if (DiskQuotaPID != 0)
+			signal_child(DiskQuotaPID, SIGHUP);
 		if (PgArchPID != 0)
 			signal_child(PgArchPID, SIGHUP);
 		if (SysLoggerPID != 0)
@@ -2849,11 +2884,15 @@ pmdie(SIGNAL_ARGS)
 				/* autovac workers are told to shut down immediately */
 				/* and bgworkers too; does this need tweaking? */
 				SignalSomeChildren(SIGTERM,
-							   BACKEND_TYPE_AUTOVAC | BACKEND_TYPE_BGWORKER);
+							   BACKEND_TYPE_AUTOVAC | BACKEND_TYPE_BGWORKER | BACKEND_TYPE_BGWORKER);
 				SignalUnconnectedWorkers(SIGTERM);
+
 				/* and the autovac launcher too */
 				if (AutoVacPID != 0)
 					signal_child(AutoVacPID, SIGTERM);
+				/* and the diskquota launcher too */
+				if (DiskQuotaPID != 0)
+					signal_child(DiskQuotaPID, SIGTERM);
 				/* and the bgwriter too */
 				if (BgWriterPID != 0)
 					signal_child(BgWriterPID, SIGTERM);
@@ -2928,13 +2967,19 @@ pmdie(SIGNAL_ARGS)
 				/* shut down all backends and workers */
 				SignalSomeChildren(SIGTERM,
 								 BACKEND_TYPE_NORMAL | BACKEND_TYPE_AUTOVAC |
-								   BACKEND_TYPE_BGWORKER);
+								 BACKEND_TYPE_BGWORKER | BACKEND_TYPE_BGWORKER);
 				/* and the autovac launcher too */
 				if (AutoVacPID != 0)
 					signal_child(AutoVacPID, SIGTERM);
 				/* and the bgwriter too */
 				if (BgWriterPID != 0)
 					signal_child(BgWriterPID, SIGTERM);
+				/* and the autovac launcher too */
+				if (AutoVacPID != 0)
+					signal_child(AutoVacPID, SIGTERM);
+				/* and the diskquota launcher too */
+				if (DiskQuotaPID != 0)
+					signal_child(DiskQuotaPID, SIGTERM);
 				/* and the walwriter too */
 				if (WalWriterPID != 0)
 					signal_child(WalWriterPID, SIGTERM);
@@ -2973,6 +3018,8 @@ pmdie(SIGNAL_ARGS)
 				signal_child(WalReceiverPID, SIGQUIT);
 			if (AutoVacPID != 0)
 				signal_child(AutoVacPID, SIGQUIT);
+			if (DiskQuotaPID != 0)
+				signal_child(DiskQuotaPID, SIGQUIT);
 			if (PgArchPID != 0)
 				signal_child(PgArchPID, SIGQUIT);
 			if (PgStatPID != 0)
@@ -3085,6 +3132,8 @@ reaper(SIGNAL_ARGS)
 				AutoVacPID = StartAutoVacLauncher();
 			if (XLogArchivingActive() && PgArchPID == 0)
 				PgArchPID = pgarch_start();
+			if (Gp_entry_postmaster && DiskQuotaingActive() && DiskQuotaPID == 0)
+				DiskQuotaPID = StartDiskQuotaLauncher();
 			if (PgStatPID == 0)
 				PgStatPID = pgstat_start();
 
@@ -3273,6 +3322,20 @@ reaper(SIGNAL_ARGS)
 			if (!EXIT_STATUS_0(exitstatus) && !EXIT_STATUS_1(exitstatus))
 				HandleChildCrash(pid, exitstatus,
 								 _("autovacuum launcher process"));
+			continue;
+		}
+		/*
+		 * Was it the disk quota launcher?	Normal exit can be ignored; we'll
+		 * start a new one at the next iteration of the postmaster's main
+		 * loop, if necessary.  Any other exit condition is treated as a
+		 * crash.
+		 */
+		if (pid == DiskQuotaPID)
+		{
+			DiskQuotaPID = 0;
+			if (!EXIT_STATUS_0(exitstatus))
+				HandleChildCrash(pid, exitstatus,
+								 _("diskquota launcher process"));
 			continue;
 		}
 
@@ -3546,7 +3609,7 @@ CleanupBackend(int pid,
 
 /*
  * HandleChildCrash -- cleanup after failed backend, bgwriter, checkpointer,
- * walwriter, autovacuum, or background worker.
+ * walwriter, autovacuum, diskquota, or background worker.
  *
  * The objectives here are to clean up our local state about the child
  * process, and to signal all other remaining children to quickdie.
@@ -3743,6 +3806,18 @@ HandleChildCrash(int pid, int exitstatus, const char *procname)
 		signal_child(AutoVacPID, (SendStop ? SIGSTOP : SIGQUIT));
 	}
 
+	/* Take care of the disk quota launcher too */
+	if (pid == DiskQuotaPID)
+		DiskQuotaPID = 0;
+	else if (DiskQuotaPID != 0 && !FatalError)
+	{
+		ereport(DEBUG2,
+				(errmsg_internal("sending %s to process %d",
+								 (SendStop ? "SIGSTOP" : "SIGQUIT"),
+								 (int) DiskQuotaPID)));
+		signal_child(DiskQuotaPID, (SendStop ? SIGSTOP : SIGQUIT));
+	}
+
 	/*
 	 * Force a power-cycle of the pgarch process too.  (This isn't absolutely
 	 * necessary, but it seems like a good idea for robustness, and it
@@ -3927,14 +4002,15 @@ PostmasterStateMachine(void)
 	{
 		/*
 		 * PM_WAIT_BACKENDS state ends when we have no regular backends
-		 * (including autovac workers), no bgworkers (including unconnected
-		 * ones), and no walwriter, autovac launcher or bgwriter.  If we are
-		 * doing crash recovery then we expect the checkpointer to exit as
-		 * well, otherwise not. The archiver, stats, and syslogger processes
+		 * (including autovac workers, disk quota workers), no bgworkers
+		 * (including unconnected ones), and no walwriter, autovac launcher,
+		 * disk quota launcher or bgwriter.  If we are doing crash recovery
+		 * or an immediate shutdown then we expect the checkpointer to exit
+		 * as well, otherwise not. The archiver, stats, and syslogger processes
 		 * are disregarded since they are not connected to shared memory; we
 		 * also disregard dead_end children here. Walsenders are also
-		 * disregarded, they will be terminated later after writing the
-		 * checkpoint record, like the archiver process.
+		 * disregarded, they will be terminated later after writing the checkpoint
+		 * record, like the archiver process.
 		 */
 		if (CountChildren(BACKEND_TYPE_NORMAL | BACKEND_TYPE_WORKER) == 0 &&
 			CountUnconnectedWorkers() == 0 &&
@@ -3944,7 +4020,9 @@ PostmasterStateMachine(void)
 			(CheckpointerPID == 0 || !FatalError) &&
 			WalWriterPID == 0 &&
 			AutoVacPID == 0 &&
-			!ServiceProcessesExist(0))
+			DiskQuotaPID == 0 &&
+			!ServiceProcessesExist(0) &&
+			AutoVacPID == 0 && DiskQuotaPID == 0)
 		{
 			if (FatalError)
 			{
@@ -4041,6 +4119,7 @@ PostmasterStateMachine(void)
 			Assert(CheckpointerPID == 0);
 			Assert(WalWriterPID == 0);
 			Assert(AutoVacPID == 0);
+			Assert(DiskQuotaPID == 0);
 			/* syslogger is not considered here */
 			pmState = PM_NO_CHILDREN;
 		}
@@ -5063,6 +5142,12 @@ SubPostmasterMain(int argc, char *argv[])
 	if (strcmp(argv[1], "--forkavworker") == 0)
 		AutovacuumWorkerIAm();
 
+	/* diskquota needs this set before calling InitProcess */
+	if (strcmp(argv[1], "--forkdqlauncher") == 0)
+		DiskquotaLauncherIAm();
+	if (strcmp(argv[1], "--forkdqworker") == 0)
+		DiskquotaWorkerIAm();
+
 	/*
 	 * Start our win32 signal implementation. This has to be done after we
 	 * read the backend variables, because we need to pick up the signal pipe
@@ -5188,6 +5273,32 @@ SubPostmasterMain(int argc, char *argv[])
 		CreateSharedMemoryAndSemaphores(false, 0);
 
 		AutoVacWorkerMain(argc - 2, argv + 2);	/* does not return */
+	}
+	if (strcmp(argv[1], "--forkdqlauncher") == 0)
+	{
+		/* Restore basic shared memory pointers */
+		InitShmemAccess(UsedShmemSegAddr);
+
+		/* Need a PGPROC to run CreateSharedMemoryAndSemaphores */
+		InitProcess();
+
+		/* Attach process to shared data structures */
+		CreateSharedMemoryAndSemaphores(false, 0);
+
+		DiskQuotaLauncherMain(argc - 2, argv + 2);	/* does not return */
+	}
+	if (strcmp(argv[1], "--forkdqworker") == 0)
+	{
+		/* Restore basic shared memory pointers */
+		InitShmemAccess(UsedShmemSegAddr);
+
+		/* Need a PGPROC to run CreateSharedMemoryAndSemaphores */
+		InitProcess();
+
+		/* Attach process to shared data structures */
+		CreateSharedMemoryAndSemaphores(false, 0);
+
+		DiskQuotaWorkerMain(argc - 2, argv + 2);	/* does not return */
 	}
 	if (strncmp(argv[1], "--forkbgworker=", 15) == 0)
 	{
@@ -5389,6 +5500,21 @@ sigusr1_handler(SIGNAL_ARGS)
 		start_autovac_launcher = true;
 	}
 
+	if (CheckPostmasterSignal(PMSIGNAL_START_DISKQUOTA_LAUNCHER) &&
+		Shutdown == NoShutdown)
+	{
+		/*
+		 * Start one iteration of the diskquota daemon, even if diskquota
+		 * is nominally not enabled.  This is so we can have an active defense
+		 * against transaction ID wraparound.  We set a flag for the main loop
+		 * to do it rather than trying to do it here --- this is because the
+		 * diskquota process itself may send the signal, and we want to handle
+		 * that by launching another iteration as soon as the current one
+		 * completes.
+		 */
+		start_diskquota_launcher = true;
+	}
+
 	if (CheckPostmasterSignal(PMSIGNAL_START_AUTOVAC_WORKER) &&
 		Shutdown == NoShutdown)
 	{
@@ -5407,6 +5533,13 @@ sigusr1_handler(SIGNAL_ARGS)
 
 		/* wal receiver has been launched */
 		pm_launch_walreceiver = true;
+	}
+
+	if (CheckPostmasterSignal(PMSIGNAL_START_DISKQUOTA_WORKER) &&
+		Shutdown == NoShutdown)
+	{
+		/* The diskquota launcher wants us to start a worker process. */
+		StartDiskquotaWorker();
 	}
 
 	Assert(FTSSubProc->procType == FtsProbeProc);
@@ -5803,6 +5936,87 @@ StartAutovacuumWorker(void)
 }
 
 /*
+ * StartDiskquotaWorker
+ *		Start an diskquota worker process.
+ *
+ * This function is here because it enters the resulting PID into the
+ * postmaster's private backends list.
+ *
+ * NB -- this code very roughly matches BackendStartup.
+ */
+static void
+StartDiskquotaWorker(void)
+{
+	Backend    *bn;
+	/*
+	 * If not in condition to run a process, don't try, but handle it like a
+	 * fork failure.  This does not normally happen, since the signal is only
+	 * supposed to be sent by diskquota launcher when it's OK to do it, but
+	 * we have to check to avoid race-condition problems during DB state
+	 * changes.
+	 */
+	if (canAcceptConnections() == CAC_OK)
+	{
+		/*
+		 * Compute the cancel key that will be assigned to this session. We
+		 * probably don't need cancel keys for diskquota workers, but we'd
+		 * better have something random in the field to prevent unfriendly
+		 * people from sending cancels to them.
+		 */
+
+		MyCancelKey = PostmasterRandom();
+
+		bn = (Backend *) malloc(sizeof(Backend));
+		if (bn)
+		{
+			bn->cancel_key = MyCancelKey;
+
+			/* Diskquota workers are not dead_end and need a child slot */
+			bn->dead_end = false;
+			bn->child_slot = MyPMChildSlot = AssignPostmasterChildSlot();
+			bn->pid = StartDiskQuotaWorker();
+			if (bn->pid > 0)
+			{
+				bn->bkend_type = BACKEND_TYPE_DISKQUOTA;
+				dlist_push_head(&BackendList, &bn->elem);
+#ifdef EXEC_BACKEND
+				ShmemBackendArrayAdd(bn);
+#endif
+				/* all OK */
+				return;
+			}
+
+			/*
+			 * fork failed, fall through to report -- actual error message was
+			 * logged by StartDiskQuotaWorker
+			 */
+			(void) ReleasePostmasterChildSlot(bn->child_slot);
+			free(bn);
+		}
+		else
+			ereport(LOG,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("out of memory")));
+	}
+
+	/*
+	 * Report the failure to the launcher, if it's running.  (If it's not, we
+	 * might not even be connected to shared memory, so don't try to call
+	 * DiskQuotaWorkerFailed.)  Note that we also need to signal it so that it
+	 * responds to the condition, but we don't do that here, instead waiting
+	 * for ServerLoop to do it.  This way we avoid a ping-pong signalling in
+	 * quick succession between the diskquota launcher and postmaster in case
+	 * things get ugly.
+	 */
+	if (DiskQuotaPID != 0)
+	{
+		elog(WARNING, "wuhao 11");
+		//DiskQuotaWorkerFailed();
+		dqlauncher_needs_signal = true;
+	}
+}
+
+/*
  * Create the opts file
  */
 static bool
@@ -5839,7 +6053,7 @@ CreateOptsFile(int argc, char *argv[], char *fullprogname)
  *
  * This reports the number of entries needed in per-child-process arrays
  * (the PMChildFlags array, and if EXEC_BACKEND the ShmemBackendArray).
- * These arrays include regular backends, autovac workers, walsenders
+ * These arrays include regular backends, autovac/diskquota workers, walsenders
  * and background workers, but not special children nor dead_end children.
  * This allows the arrays to have a fixed maximum size, to wit the same
  * too-many-children limit enforced by canAcceptConnections().	The exact value
@@ -5848,8 +6062,8 @@ CreateOptsFile(int argc, char *argv[], char *fullprogname)
 int
 MaxLivePostmasterChildren(void)
 {
-	return 2 * (MaxConnections + autovacuum_max_workers + 1 +
-				GetNumRegisteredBackgroundWorkers(0));
+	return 2 * (MaxConnections + autovacuum_max_workers + 2 + diskquota_max_workers
+				+ GetNumRegisteredBackgroundWorkers(0));
 }
 
 /*

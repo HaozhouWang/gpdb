@@ -782,6 +782,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"DATABASE", Query_for_list_of_databases},
 	{"DICTIONARY", Query_for_list_of_ts_dictionaries, NULL, THING_NO_SHOW},
 	{"DOMAIN", NULL, &Query_for_list_of_domains},
+	{"DISK QUOTA", NULL, NULL, NULL},
 	{"EXTENSION", Query_for_list_of_extensions},
 	{"FOREIGN DATA WRAPPER", NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL},

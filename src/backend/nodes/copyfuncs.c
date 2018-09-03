@@ -4332,6 +4332,31 @@ _copyAlterExtensionContentsStmt(const AlterExtensionContentsStmt *from)
 	return newnode;
 }
 
+static CreateDiskQuotaStmt *
+_copyCreateDiskQuotaStmt(const CreateDiskQuotaStmt *from)
+{
+	CreateDiskQuotaStmt *newnode = makeNode(CreateDiskQuotaStmt);
+
+	COPY_STRING_FIELD(quotaname);
+	COPY_SCALAR_FIELD(dbobjtype);
+	COPY_STRING_FIELD(objname);
+	COPY_NODE_FIELD(options);
+
+	return newnode;
+}
+
+static DropDiskQuotaStmt *
+_copyDropDiskQuotaStmt(const DropDiskQuotaStmt *from)
+{
+	DropDiskQuotaStmt *newnode = makeNode(DropDiskQuotaStmt);
+
+	COPY_STRING_FIELD(quotaname);
+	COPY_SCALAR_FIELD(missing_ok);
+
+	return newnode;
+}
+
+
 static CreateFdwStmt *
 _copyCreateFdwStmt(const CreateFdwStmt *from)
 {
@@ -5632,6 +5657,12 @@ copyObject(const void *from)
 			break;
 		case T_AlterExtensionContentsStmt:
 			retval = _copyAlterExtensionContentsStmt(from);
+			break;
+		case T_CreateDiskQuotaStmt:
+			retval = _copyCreateDiskQuotaStmt(from);
+			break;
+		case T_DropDiskQuotaStmt:
+			retval = _copyDropDiskQuotaStmt(from);
 			break;
 		case T_CreateFdwStmt:
 			retval = _copyCreateFdwStmt(from);

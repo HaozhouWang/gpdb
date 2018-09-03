@@ -63,6 +63,7 @@
 #include "parser/parser.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
 #include "rewrite/rewriteHandler.h"
@@ -3725,6 +3726,10 @@ ProcessInterrupts(const char* filename, int lineno)
 					(errcode(ERRCODE_ADMIN_SHUTDOWN),
 					 errmsg("terminating autovacuum process due to administrator command"),
 					 errSendAlert(false)));
+		else if (IsDiskQuotaWorkerProcess())
+			ereport(FATAL,
+					(errcode(ERRCODE_ADMIN_SHUTDOWN),
+					 errmsg("terminating disk quota process due to administrator command")));
 		else if (RecoveryConflictPending && RecoveryConflictRetryable)
 		{
 			pgstat_report_recovery_conflict(RecoveryConflictReason);
@@ -3823,6 +3828,13 @@ ProcessInterrupts(const char* filename, int lineno)
 			ereport(ERROR,
 					(errcode(ERRCODE_QUERY_CANCELED),
 					 errmsg("canceling autovacuum task")));
+		}
+		if (IsDiskQuotaWorkerProcess())
+		{
+			LockErrorCleanup();
+			ereport(ERROR,
+					(errcode(ERRCODE_QUERY_CANCELED),
+					 errmsg("canceling diskquota task")));
 		}
 		if (RecoveryConflictPending)
 		{

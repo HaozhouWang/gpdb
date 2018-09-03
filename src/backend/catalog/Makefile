@@ -64,11 +64,10 @@ POSTGRES_BKI_SRCS = $(addprefix $(top_srcdir)/src/include/catalog/,\
 	pg_partition_encoding.h \
 	pg_type_encoding.h \
 	pg_stat_last_operation.h pg_stat_last_shoperation.h \
-	toasting.h indexing.h \
+	toasting.h indexing.h pg_diskquota.h\
     )
 
 POSTGRES_BKI_SRCS := pg_proc_combined.h $(POSTGRES_BKI_SRCS)
-
 
 # location of Catalog.pm
 catalogdir = $(top_srcdir)/src/backend/catalog

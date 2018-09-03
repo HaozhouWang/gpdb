@@ -425,6 +425,14 @@ DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, on pg_compression usin
 DECLARE_UNIQUE_INDEX(pg_range_rngtypid_index, 3542, on pg_range using btree(rngtypid oid_ops));
 #define RangeTypidIndexId					3542
 
+DECLARE_UNIQUE_INDEX(pg_diskquota_oid_index, 5524, on pg_diskquota using btree(oid oid_ops));
+#define DiskQuotaOidIndexId 5524
+DECLARE_UNIQUE_INDEX(pg_diskquota_name_index, 5525, on pg_diskquota using btree(quotaname name_ops));
+#define DiskQuotaNameIndexId 5525
+
+DECLARE_UNIQUE_INDEX(pg_diskquota_target_oid_index, 5526, on pg_diskquota using btree(quotatargetoid oid_ops));
+#define DiskQuotaTargetOidIndexId 5526
+
 /* last step of initialization script: build the indexes declared above */
 BUILD_INDICES
 

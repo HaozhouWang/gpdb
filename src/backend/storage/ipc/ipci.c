@@ -31,6 +31,7 @@
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/bgwriter.h"
+#include "postmaster/diskquota.h"
 #include "postmaster/postmaster.h"
 #include "replication/walreceiver.h"
 #include "replication/walsender.h"
@@ -156,6 +157,7 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 		size = add_size(size, ProcSignalShmemSize());
 		size = add_size(size, CheckpointerShmemSize());
 		size = add_size(size, AutoVacuumShmemSize());
+		size = add_size(size, DiskQuotaShmemSize());
 		size = add_size(size, WalSndShmemSize());
 		size = add_size(size, WalRcvShmemSize());
 		size = add_size(size, BTreeShmemSize());
@@ -311,6 +313,7 @@ CreateSharedMemoryAndSemaphores(bool makePrivate, int port)
 	ProcSignalShmemInit();
 	CheckpointerShmemInit();
 	AutoVacuumShmemInit();
+	DiskQuotaShmemInit();
 	WalSndShmemInit();
 	WalRcvShmemInit();
 

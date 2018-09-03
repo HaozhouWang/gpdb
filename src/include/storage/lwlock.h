@@ -102,6 +102,7 @@ typedef enum LWLockId
 	RelfilenodeGenLock,
 	TablespaceHashLock,
 	GpReplicationConfigFileLock,
+	DiskQuotaLock,
 	/* must be last except for MaxDynamicLWLock: */
 	NumFixedLWLocks,
 
