@@ -15645,6 +15645,7 @@ unreserved_keyword:
 			| DICTIONARY
 			| DISABLE_P
 			| DISCARD
+			| DISK
 			| DOCUMENT_P
 			| DOMAIN_P
 			| DOUBLE_P
@@ -15775,6 +15776,7 @@ unreserved_keyword:
 			| PROGRAM
 			| PROTOCOL
 			| QUEUE
+			| QUOTA
 			| QUOTE
 			| RANDOMLY /* gp */
 			| RANGE
