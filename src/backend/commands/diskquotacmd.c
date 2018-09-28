@@ -80,7 +80,7 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 	{
 		case DISK_QUOTA_TABLE:
 		{
-			db_object_oid = RangeVarGetRelidExtended(stmt->table, NoLock, RVR_MISSING_OK, NULL, NULL);
+			db_object_oid = RangeVarGetRelidExtended(stmt->table, NoLock, true, false, NULL, NULL);
 
 			if (!OidIsValid(db_object_oid)){
 				if (stmt->table->schemaname)

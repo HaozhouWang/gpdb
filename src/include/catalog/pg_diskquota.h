@@ -19,7 +19,6 @@
 #define PG_DISKQUOTA_H
 
 #include "catalog/genbki.h"
-#include "catalog/pg_diskquota_d.h"
 
 /* ----------------
  *	pg_diskquota definition.  cpp turns this into
@@ -41,7 +40,9 @@ typedef enum DiskQuotaType
 
 } DiskQuotaType;
 
-CATALOG(pg_diskquota,6122,DiskQuotaRelationId)
+#define DiskQuotaRelationId 6122
+
+CATALOG(pg_diskquota,6122)
 {
 	NameData	quotaname;		/* diskquota name */
 	int16		quotatype;		/* diskquota type name */
@@ -49,6 +50,14 @@ CATALOG(pg_diskquota,6122,DiskQuotaRelationId)
 	int32		quotalimit;		/* diskquota size limit in MB*/
 	int32		quotaredzone;	/* diskquota redzone in MB*/
 } FormData_pg_diskquota;
+
+#define Anum_pg_diskquota_quotaname 1
+#define Anum_pg_diskquota_quotatype 2
+#define Anum_pg_diskquota_quotatargetoid 3
+#define Anum_pg_diskquota_quotalimit 4
+#define Anum_pg_diskquota_quotaredzone 5
+
+#define Natts_pg_diskquota 5
 
 /* ----------------
  *	Form_pg_diskquota corresponds to a pointer to a tuple with

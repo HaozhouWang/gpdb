@@ -6223,7 +6223,7 @@ obj_name:
 quota_option_elem:
 		ColLabel '=' Sconst
 		{
-			$$ = makeDefElem($1, (Node *)makeString($3), @1);
+			$$ = makeDefElem($1, (Node *)makeString($3));
 		}
 	;
 
@@ -15963,9 +15963,6 @@ PartitionIdentKeyword: ABORT_P
 			| DELIMITER
 			| DELIMITERS
 			| DISABLE_P
-			| DISCARD
-			| DISK
-			| DOCUMENT_P
 			| DOMAIN_P
 			| DOUBLE_P
 			| DROP
@@ -16067,10 +16064,8 @@ PartitionIdentKeyword: ABORT_P
 			| PRIVILEGES
 			| PROCEDURAL
 			| PROCEDURE
-			| PROGRAM
 			| PROTOCOL
 			| QUEUE
-			| QUOTA
 			| QUOTE
 			| RANGE
 			| READ
