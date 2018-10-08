@@ -38,6 +38,7 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 	Oid			ownerId;
 	ListCell   *cell;
 	bool		quota_set = false;
+	CatalogIndexState indstate;
 
 
 	disk_quota_rel = heap_open(DiskQuotaRelationId, RowExclusiveLock);
@@ -140,14 +141,14 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 		{
 			int limitinMB;
 			const char *hintmsg;
-			if (!parse_int(strVal(def->arg), &limitinMB, GUC_UNIT_MB, &hintmsg))
+			if (!parse_int(strVal(def->arg), &limitinMB, GUC_UNIT_KB, &hintmsg))
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						 errmsg("invalid value for integer option \"%s\": %s",
 								def->defname, strVal(def->arg))));
 			}
-			quota_values[Anum_pg_diskquota_quotalimit- 1] = limitinMB;
+			quota_values[Anum_pg_diskquota_quotalimit- 1] = limitinMB * 1024;
 			quota_set = true;
 		}
 		else
@@ -170,7 +171,10 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 
 	tuple = heap_form_tuple(disk_quota_rel->rd_att, quota_values, quota_nulls);
 
-	disk_quota_oid = CatalogTupleInsert(disk_quota_rel, tuple);
+	indstate = CatalogOpenIndexes(disk_quota_rel);
+	disk_quota_oid = simple_heap_insert(disk_quota_rel, tuple);
+	CatalogIndexInsert(indstate, tuple);
+	CatalogCloseIndexes(indstate);
 
 	heap_freetuple(tuple);
 
@@ -205,7 +209,7 @@ void DropDiskQuota(DropDiskQuotaStmt *stmt)
 		}
 	}
 
-	CatalogTupleDelete(disk_quota_rel, &disk_quota_tuple->t_self);
+	simple_heap_delete(disk_quota_rel, &disk_quota_tuple->t_self);
 
 	ReleaseSysCache(disk_quota_tuple);
 
