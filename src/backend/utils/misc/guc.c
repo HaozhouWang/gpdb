@@ -599,6 +599,8 @@ const char *const config_group_names[] =
 	gettext_noop("Statistics / Query and Index Statistics Collector"),
 	/* AUTOVACUUM */
 	gettext_noop("Autovacuum"),
+	/* DISKQUOTA */
+	gettext_noop("Disk Quota"),
 	/* CLIENT_CONN */
 	gettext_noop("Client Connection Defaults"),
 	/* CLIENT_CONN_STATEMENT */

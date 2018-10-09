@@ -77,6 +77,7 @@
 #include "utils/timestamp.h"
 #include "utils/tqual.h"
 #include "utils/builtins.h"
+#include "cdb/cdbvars.h"
 
 /*
  * GUC parameters
@@ -339,6 +340,10 @@ StartDiskQuotaLauncher(void)
 		case 0:
 			/* Close the postmaster's sockets */
 			ClosePostmasterPorts(false);
+
+			/* Lose the postmaster's on-exit routines */
+			on_exit_reset();
+
 			DiskQuotaLauncherMain(0, NULL);
 			break;
 #endif
@@ -401,7 +406,7 @@ GetDatabaseTuple(const char *dbname)
 	relation = heap_open(DatabaseRelationId, AccessShareLock);
 	scan = systable_beginscan(relation, DatabaseNameIndexId,
 								criticalSharedRelcachesBuilt,
-								NULL,
+                                SnapshotNow,
 								1, key);
 
 	tuple = systable_getnext(scan);
@@ -442,6 +447,7 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	sigjmp_buf	local_sigjmp_buf;
 
 	am_diskquota_launcher = true;
+	IsUnderPostmaster = true;
 
 	/* Identify myself via ps */
 	init_ps_display("disk quota launcher process", "", "", "");
@@ -542,8 +548,6 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	 */
 	SetConfigOption("statement_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
 	SetConfigOption("lock_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
-	SetConfigOption("idle_in_transaction_session_timeout", "0",
-					PGC_SUSET, PGC_S_OVERRIDE);
 
 	/*
 	 * Force default_transaction_isolation to READ COMMITTED.  We don't want
@@ -872,6 +876,7 @@ DiskQuotaWorkerMain(int argc, char *argv[])
 	Oid			dbid;
 
 	am_diskquota_worker = true;
+	IsUnderPostmaster = true;
 
 	/* Identify myself via ps */
 	init_ps_display("disk quota worker process", "", "", "");
@@ -959,8 +964,6 @@ DiskQuotaWorkerMain(int argc, char *argv[])
 	 */
 	SetConfigOption("statement_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
 	SetConfigOption("lock_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
-	SetConfigOption("idle_in_transaction_session_timeout", "0",
-					PGC_SUSET, PGC_S_OVERRIDE);
 
 	/*
 	 * Force default_transaction_isolation to READ COMMITTED.  We don't want
