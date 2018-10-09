@@ -9196,7 +9196,7 @@ check_autovacuum_max_workers(int *newval, void **extra, GucSource source)
 static bool
 check_diskquota_max_workers(int *newval, void **extra, GucSource source)
 {
-	if (MaxConnections + *newval + 1 + max_worker_processes > MAX_BACKENDS)
+	if (MaxConnections + *newval + 1 + GetNumShmemAttachedBgworkers() > MAX_BACKENDS)
 		return false;
 	return true;
 }

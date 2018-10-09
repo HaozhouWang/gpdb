@@ -1059,12 +1059,13 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(path));
 }
 
-int64 calculate_total_relation_size_by_oid(Oid relOid)
+int64
+calculate_total_relation_size_by_oid(Oid relOid)
 {
 	Relation	rel;
 	int64		size;
 
-	rel = try_relation_open(relOid, AccessShareLock);
+	rel = try_relation_open(relOid, AccessShareLock, false);
 
 	if (rel == NULL)
 		return 0;

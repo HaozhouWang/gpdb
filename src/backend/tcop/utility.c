@@ -1572,12 +1572,10 @@ ProcessUtilitySlow(Node *parsetree,
 
 			case T_CreateDiskQuotaStmt:
 				CreateDiskQuota((CreateDiskQuotaStmt *) parsetree);
-				commandCollected = true;
 				break;
 
 			case T_DropDiskQuotaStmt:
 				DropDiskQuota((DropDiskQuotaStmt *) parsetree);
-				commandCollected = true;
 				break;
 
 			case T_CreateFdwStmt:

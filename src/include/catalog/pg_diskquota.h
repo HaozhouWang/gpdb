@@ -40,9 +40,9 @@ typedef enum DiskQuotaType
 
 } DiskQuotaType;
 
-#define DiskQuotaRelationId 6122
+#define DiskQuotaRelationId 5522
 
-CATALOG(pg_diskquota,6122)
+CATALOG(pg_diskquota,5522)
 {
 	NameData	quotaname;		/* diskquota name */
 	int16		quotatype;		/* diskquota type name */

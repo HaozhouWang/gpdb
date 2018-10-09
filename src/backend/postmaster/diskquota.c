@@ -67,7 +67,6 @@
 #include "tcop/tcopprot.h"
 #include "utils/dbsize.h"
 #include "utils/fmgroids.h"
-#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -77,8 +76,7 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/tqual.h"
-#include "utils/varlena.h"
-
+#include "utils/builtins.h"
 
 /*
  * GUC parameters
@@ -339,8 +337,6 @@ StartDiskQuotaLauncher(void)
 
 #ifndef EXEC_BACKEND
 		case 0:
-			/* in postmaster child ... */
-			InitPostmasterChild();
 			/* Close the postmaster's sockets */
 			ClosePostmasterPorts(false);
 			DiskQuotaLauncherMain(0, NULL);
@@ -365,9 +361,9 @@ launcher_monitor_disk_quota(void)
 	while(!got_SIGTERM)
 	{
 		int rc;
-		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-					5000, WAIT_EVENT_DISKQUOTA_MAIN);
-		ResetLatch(MyLatch);
+		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					5000);
+		ResetLatch(&MyProc->procLatch);
 		/*
 		 * Emergency bailout if postmaster has died.  This is to avoid the
 		 * necessity for manual cleanup of all postmaster children.
@@ -448,7 +444,7 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	am_diskquota_launcher = true;
 
 	/* Identify myself via ps */
-	init_ps_display(pgstat_get_backend_desc(B_DISKQUOTA_LAUNCHER), "", "", "");
+	init_ps_display("disk quota launcher process", "", "", "");
 	elog(LOG, "disk quota enabled database list:'%s'\n", guc_dq_database_list);
 
 	if (PostAuthDelay)
@@ -484,7 +480,7 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 #ifndef EXEC_BACKEND
 	InitProcess();
 #endif
-	InitPostgres(NULL, InvalidOid, NULL, InvalidOid, NULL, false);
+	InitPostgres(NULL, InvalidOid, NULL, NULL);
 
 	SetProcessingMode(NormalProcessing);
 
@@ -495,7 +491,9 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	 */
 	diskquotaMemCxt = AllocSetContextCreate(TopMemoryContext,
 											"diskquota Launcher",
-											ALLOCSET_DEFAULT_SIZES);
+											ALLOCSET_DEFAULT_MINSIZE,
+											ALLOCSET_DEFAULT_INITSIZE,
+											ALLOCSET_DEFAULT_MAXSIZE);
 	MemoryContextSwitchTo(diskquotaMemCxt);
 
 	/*
@@ -505,70 +503,18 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
-		/* since not using PG_TRY, must reset error stack by hand */
-		error_context_stack = NULL;
-
 		/* Prevents interrupts while cleaning up */
 		HOLD_INTERRUPTS();
-
-		/* Forget any pending QueryCancel or timeout request */
-		disable_all_timeouts(false);
-		QueryCancelPending = false; /* second to avoid race condition */
 
 		/* Report the error to the server log */
 		EmitErrorReport();
 
-		/* Abort the current transaction in order to recover */
-		AbortCurrentTransaction();
-
 		/*
-		 * Release any other resources, for the case where we were not in a
-		 * transaction.
+		 * We can now go away.	Note that because we called InitProcess, a
+		 * callback was registered to do ProcKill, which will clean up
+		 * necessary state.
 		 */
-		LWLockReleaseAll();
-		pgstat_report_wait_end();
-		AbortBufferIO();
-		UnlockBuffers();
-		if (CurrentResourceOwner)
-		{
-			ResourceOwnerRelease(CurrentResourceOwner,
-								 RESOURCE_RELEASE_BEFORE_LOCKS,
-								 false, true);
-			/* we needn't bother with the other ResourceOwnerRelease phases */
-		}
-		AtEOXact_Buffers(false);
-		AtEOXact_SMgr();
-		AtEOXact_Files(false);
-		AtEOXact_HashTables(false);
-
-		/*
-		 * Now return to normal top-level context and clear ErrorContext for
-		 * next time.
-		 */
-		MemoryContextSwitchTo(diskquotaMemCxt);
-		FlushErrorState();
-
-		/* Flush any leaked data in the top-level context */
-		MemoryContextResetAndDeleteChildren(diskquotaMemCxt);
-
-		/*
-		 * Make sure pgstat also considers our stat data as gone.  Note: we
-		 * mustn't use diskquota_refresh_stats here.
-		 */
-		pgstat_clear_snapshot();
-
-		/* Now we can allow interrupts again */
-		RESUME_INTERRUPTS();
-
-		/* if in shutdown mode, no need for anything further; just go away */
-		if (got_SIGTERM)
-			goto shutdown;
-
-		/*
-		 * Sleep at least 1 second after any error.  We don't want to be
-		 * filling the error logs as fast as we can.
-		 */
-		pg_usleep(1000000L);
+		proc_exit(0);
 	}
 
 	/* We can now handle ereport(ERROR) */
@@ -615,13 +561,8 @@ DiskQuotaLauncherMain(int argc, char *argv[])
 	/* monitor disk quota change */
 	launcher_monitor_disk_quota();
 
-	/* Normal exit from the diskquota launcher is here */
-shutdown:
-	ereport(DEBUG1,
-			(errmsg("diskquota launcher shutting down")));
-	DiskQuotaShmem->dq_launcherpid = 0;
-
-	proc_exit(0);				/* done */
+	/* All done, go away */
+	proc_exit(0);
 }
 
 /* let postmaster to fork disk quota worker process */
@@ -643,7 +584,9 @@ launcher_init_disk_quota(void)
 	idx = 0;
 	tmpcxt = AllocSetContextCreate(CurrentMemoryContext,
 								   "Start worker tmp cxt",
-								   ALLOCSET_DEFAULT_SIZES);
+								   ALLOCSET_DEFAULT_MINSIZE,
+								   ALLOCSET_DEFAULT_INITSIZE,
+								   ALLOCSET_DEFAULT_MAXSIZE);
 	oldcxt = MemoryContextSwitchTo(tmpcxt);
 
 	init_worker_parameters();
@@ -658,8 +601,8 @@ launcher_init_disk_quota(void)
 				elog(WARNING, "running failed, state=%d", (int)item->dqw_state);
 			}
 			LWLockRelease(DiskQuotaLock);
-			WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-				2000, WAIT_EVENT_DISKQUOTA_MAIN);
+			WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+				2000);
 			continue;
 		}
 		DiskQuotaShmem->dq_startingWorker = item =  &itemArray[idx];
@@ -674,9 +617,9 @@ launcher_init_disk_quota(void)
 
 		do_start_worker(item);
 
-		WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-			2000, WAIT_EVENT_DISKQUOTA_MAIN);
-		ResetLatch(MyLatch);
+		WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+			2000);
+		ResetLatch(&MyProc->procLatch);
 
 		idx++;
 	}
@@ -692,7 +635,7 @@ dq_sighup_handler(SIGNAL_ARGS)
 	int			save_errno = errno;
 
 	got_SIGHUP = true;
-	SetLatch(MyLatch);
+	SetLatch(&MyProc->procLatch);
 
 	errno = save_errno;
 }
@@ -704,7 +647,7 @@ dql_sigusr2_handler(SIGNAL_ARGS)
 	int			save_errno = errno;
 
 	got_SIGUSR2 = true;
-	SetLatch(MyLatch);
+	SetLatch(&MyProc->procLatch);
 
 	errno = save_errno;
 }
@@ -716,7 +659,7 @@ dql_sigterm_handler(SIGNAL_ARGS)
 	int			save_errno = errno;
 
 	got_SIGTERM = true;
-	SetLatch(MyLatch);
+	SetLatch(&MyProc->procLatch);
 
 	errno = save_errno;
 }
@@ -806,13 +749,12 @@ DiskQuotaShmemInit(void)
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
 	hash_ctl.entrysize = sizeof(BlackMapEntry);
-	hash_ctl.alloc = ShmemAllocNoError;
 	hash_ctl.dsize = hash_ctl.max_dsize = hash_select_dirsize(MAX_DISK_QUOTA_BLACK_ENTRIES);
 	disk_quota_black_map = ShmemInitHash("blackmap whose quota limitation is reached",
 									INIT_DISK_QUOTA_BLACK_ENTRIES,
 									MAX_DISK_QUOTA_BLACK_ENTRIES,
 									&hash_ctl,
-									HASH_DIRSIZE | HASH_SHARED_MEM | HASH_ALLOC | HASH_ELEM | HASH_BLOBS);
+									HASH_DIRSIZE | HASH_SHARED_MEM | HASH_ALLOC | HASH_ELEM);
 
 
 	if (!IsUnderPostmaster)
@@ -902,11 +844,12 @@ StartDiskQuotaWorker(void)
 
 #ifndef EXEC_BACKEND
 		case 0:
-			/* in postmaster child ... */
-			InitPostmasterChild();
 
 			/* Close the postmaster's sockets */
 			ClosePostmasterPorts(false);
+
+			/* Lose the postmaster's on-exit routines */
+			on_exit_reset();
 
 			DiskQuotaWorkerMain(0, NULL);
 			break;
@@ -931,7 +874,7 @@ DiskQuotaWorkerMain(int argc, char *argv[])
 	am_diskquota_worker = true;
 
 	/* Identify myself via ps */
-	init_ps_display(pgstat_get_backend_desc(B_DISKQUOTA_WORKER), "", "", "");
+	init_ps_display("disk quota worker process", "", "", "");
 
 	SetProcessingMode(InitProcessing);
 
@@ -1081,7 +1024,7 @@ DiskQuotaWorkerMain(int argc, char *argv[])
 		 * Note: if we have selected a just-deleted database (due to using
 		 * stale stats info), we'll fail and exit here.
 		 */
-		InitPostgres(NULL, dbid, NULL, InvalidOid, dbname, false);
+		InitPostgres(NULL, dbid, NULL, dbname);
 		SetProcessingMode(NormalProcessing);
 		set_ps_display(dbname, false);
 		ereport(DEBUG1,
@@ -1153,7 +1096,9 @@ init_disk_quota_model(void)
 	MemoryContext DSModelContext;
 	DSModelContext = AllocSetContextCreate(TopMemoryContext,
 										   "Disk quotas model context",
-										   ALLOCSET_DEFAULT_SIZES);
+										   ALLOCSET_DEFAULT_MINSIZE,
+										   ALLOCSET_DEFAULT_INITSIZE,
+										   ALLOCSET_DEFAULT_MAXSIZE);
 
 	/* init hash table for table/schema/role etc.*/
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
@@ -1164,7 +1109,7 @@ init_disk_quota_model(void)
 	table_size_map = hash_create("TableSizeEntry map",
 								1024,
 								&hash_ctl,
-								HASH_ELEM | HASH_CONTEXT| HASH_BLOBS);
+								HASH_ELEM | HASH_CONTEXT);
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
@@ -1174,7 +1119,7 @@ init_disk_quota_model(void)
 	namespace_size_map = hash_create("NamespaceSizeEntry map",
 								1024,
 								&hash_ctl,
-								HASH_ELEM | HASH_CONTEXT| HASH_BLOBS);
+								HASH_ELEM | HASH_CONTEXT);
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
@@ -1184,7 +1129,7 @@ init_disk_quota_model(void)
 	role_size_map = hash_create("RoleSizeEntry map",
 								1024,
 								&hash_ctl,
-								HASH_ELEM | HASH_CONTEXT| HASH_BLOBS);
+								HASH_ELEM | HASH_CONTEXT);
 
 	memset(&hash_ctl, 0, sizeof(hash_ctl));
 	hash_ctl.keysize = sizeof(Oid);
@@ -1192,7 +1137,7 @@ init_disk_quota_model(void)
 	local_disk_quota_black_map = hash_create("local blackmap whose quota limitation is reached",
 									MAX_LOCAL_DISK_QUOTA_BLACK_ENTRIES,
 									&hash_ctl,
-									HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+									HASH_ELEM | HASH_CONTEXT);
 	if (pgstat_table_map == NULL)
 	{
 		HASHCTL ctl;
@@ -1205,7 +1150,7 @@ init_disk_quota_model(void)
 		pgstat_table_map = hash_create("disk quota Table State Entry lookup hash table",
 									NUM_WORKITEMS,
 									&ctl,
-									HASH_ELEM | HASH_BLOBS);
+									HASH_ELEM);
 	}
 
 	if (pgstat_active_table_map == NULL)
@@ -1220,7 +1165,7 @@ init_disk_quota_model(void)
 		pgstat_active_table_map = hash_create("disk quota Active Table Entry lookup hash table",
 									INIT_ACTIVE_TABLE_SIZE,
 									&ctl,
-									HASH_ELEM | HASH_BLOBS);
+									HASH_ELEM);
 	}
 
 	/* calcualte the disk usage for each database objects */
@@ -1441,7 +1386,7 @@ calculate_table_disk_usage(void)
 	HASH_SEQ_STATUS iter;
 
 	classRel = heap_open(RelationRelationId, AccessShareLock);
-	relScan = heap_beginscan_catalog(classRel, 0, NULL);
+	relScan = heap_beginscan(classRel, SnapshotNow, 0, NULL);
 
 	while ((tuple = heap_getnext(relScan, ForwardScanDirection)) != NULL)
 	{
@@ -1653,14 +1598,14 @@ do_diskquota(void)
 {
 	init_disk_quota_model();
 
-	SetLatch(MyLatch);
+	SetLatch(&MyProc->procLatch);
 	while (!got_SIGTERM)
 	{
 		/* refresh interval is 2 seconds */
 		int rc;
-		rc = WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-					2000, WAIT_EVENT_DISKQUOTA_MAIN);
-		ResetLatch(MyLatch);
+		rc = WaitLatch(&MyProc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					2000);
+		ResetLatch(&MyProc->procLatch);
 
 		/*
 		 * Emergency bailout if postmaster has died.  This is to avoid the

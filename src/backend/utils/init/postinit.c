@@ -514,7 +514,7 @@ InitializeMaxBackends(void)
 
 	/* the extra unit accounts for the autovacuum launcher and diskquota launcher */
 	MaxBackends = MaxConnections + autovacuum_max_workers + 2 + diskquota_max_workers
-		GetNumShmemAttachedBgworkers();
+		+ GetNumShmemAttachedBgworkers();
 
 	/* internal error because the values were all checked previously */
 	if (MaxBackends > MAX_BACKENDS)

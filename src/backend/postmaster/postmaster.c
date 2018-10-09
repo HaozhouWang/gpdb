@@ -3809,7 +3809,7 @@ HandleChildCrash(int pid, int exitstatus, const char *procname)
 	/* Take care of the disk quota launcher too */
 	if (pid == DiskQuotaPID)
 		DiskQuotaPID = 0;
-	else if (DiskQuotaPID != 0 && take_action)
+	else if (DiskQuotaPID != 0 && !FatalError)
 	{
 		ereport(DEBUG2,
 				(errmsg_internal("sending %s to process %d",
@@ -4021,7 +4021,7 @@ PostmasterStateMachine(void)
 			WalWriterPID == 0 &&
 			AutoVacPID == 0 &&
 			DiskQuotaPID == 0 &&
-			!ServiceProcessesExist(0))
+			!ServiceProcessesExist(0) &&
 			AutoVacPID == 0 && DiskQuotaPID == 0)
 		{
 			if (FatalError)
@@ -5963,13 +5963,8 @@ StartDiskquotaWorker(void)
 		 * better have something random in the field to prevent unfriendly
 		 * people from sending cancels to them.
 		 */
-		if (!RandomCancelKey(&MyCancelKey))
-		{
-			ereport(LOG,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("could not generate random cancel key")));
-			return;
-		}
+
+		MyCancelKey = PostmasterRandom();
 
 		bn = (Backend *) malloc(sizeof(Backend));
 		if (bn)
@@ -5979,7 +5974,6 @@ StartDiskquotaWorker(void)
 			/* Diskquota workers are not dead_end and need a child slot */
 			bn->dead_end = false;
 			bn->child_slot = MyPMChildSlot = AssignPostmasterChildSlot();
-			bn->bgworker_notify = false;
 			bn->pid = StartDiskQuotaWorker();
 			if (bn->pid > 0)
 			{
