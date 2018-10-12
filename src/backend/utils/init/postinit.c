@@ -1028,13 +1028,17 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		if (out_dbname)
 			strcpy(out_dbname, dbname);
 
-        if (MyProcPort == NULL && IsDiskQuotaWorkerProcess())
-        {
-            MyProcPort = palloc(sizeof(Port));
-            MemSet(MyProcPort, 0, sizeof(Port));
-            MyProcPort->database_name = pstrdup(dbname);
-            MyProcPort->user_name = prepare_user_name(username);
-        }
+		// FIXME: HOW TO SETUP GRACEFULLY
+		if (MyProcPort == NULL && IsDiskQuotaWorkerProcess())
+		{
+			MemoryContext old = CurrentMemoryContext;
+			MemoryContextSwitchTo(TopMemoryContext);
+			MyProcPort = palloc(sizeof(Port));
+			MemSet(MyProcPort, 0, sizeof(Port));
+			MyProcPort->database_name = pstrdup(dbname);
+			MyProcPort->user_name = prepare_user_name(username);
+			MemoryContextSwitchTo(old);
+		}
 	}
 
 	/* Now we can mark our PGPROC entry with the database ID */
