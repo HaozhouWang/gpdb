@@ -148,7 +148,7 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 						 errmsg("invalid value for integer option \"%s\": %s",
 								def->defname, strVal(def->arg))));
 			}
-			quota_values[Anum_pg_diskquota_quotalimit- 1] = limitinMB * 1024;
+			quota_values[Anum_pg_diskquota_quotalimit- 1] = limitinMB / 1024;
 			quota_set = true;
 		}
 		else

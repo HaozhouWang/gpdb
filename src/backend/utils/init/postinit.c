@@ -24,6 +24,7 @@
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
+#include "catalog/pg_authid.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -560,6 +561,89 @@ static void check_superuser_connection_limit()
 						errSendAlert(true)));
 }
 
+/*
+ * Find a super user.
+ *
+ * superuser is used to store the username, its size should be >= NAMEDATALEN.
+ *
+ * This functions is derived from getSuperuser() @cdbtm.c
+ */
+static void
+findSuperuser(char *superuser, bool try_bootstrap)
+{
+	Relation auth_rel;
+	HeapTuple	auth_tup;
+	ScanKeyData	scankey[3];
+	SysScanDesc	sscan;
+	int			nkeys;
+	bool	isNull;
+
+	*superuser = '\0';
+
+	auth_rel = heap_open(AuthIdRelationId, AccessShareLock);
+
+	ScanKeyInit(&scankey[0],
+				Anum_pg_authid_rolsuper,
+				BTEqualStrategyNumber, F_BOOLEQ,
+				BoolGetDatum(true));
+	ScanKeyInit(&scankey[1],
+				Anum_pg_authid_rolcanlogin,
+				BTEqualStrategyNumber, F_BOOLEQ,
+				BoolGetDatum(true));
+	ScanKeyInit(&scankey[2],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(BOOTSTRAP_SUPERUSERID));
+
+	nkeys = try_bootstrap ? 3 : 2;
+
+	/* FIXME: perform indexed scan here? */
+	sscan = systable_beginscan(auth_rel, InvalidOid, false,
+							   SnapshotNow, nkeys, scankey);
+
+	while (HeapTupleIsValid(auth_tup = systable_getnext(sscan)))
+	{
+		Datum	attrName;
+		Oid		userOid;
+		Datum	validuntil;
+
+		validuntil = heap_getattr(auth_tup, Anum_pg_authid_rolvaliduntil,
+								  RelationGetDescr(auth_rel), &isNull);
+		/* we actually want it to be NULL, that means always valid */
+		if (!isNull)
+			continue;
+
+		attrName = heap_getattr(auth_tup, Anum_pg_authid_rolname,
+								RelationGetDescr(auth_rel), &isNull);
+		Assert(!isNull);
+		strncpy(superuser, DatumGetCString(attrName), NAMEDATALEN);
+		superuser[NAMEDATALEN - 1] = '\0';
+
+		userOid = HeapTupleGetOid(auth_tup);
+		SetSessionUserId(userOid, true);
+
+		break;
+	}
+
+	systable_endscan(sscan);
+	heap_close(auth_rel, AccessShareLock);
+
+	if (!*superuser)
+		ereport(FATAL,
+				(errcode(ERRCODE_INVALID_NAME),
+				 errmsg("no super user is found")));
+}
+static char *
+prepare_user_name(const char *user_name)
+{
+    char super[NAMEDATALEN];
+    if (user_name)
+        return pstrdup(user_name);
+    // use superuser
+    findSuperuser(super, true);
+    return pstrdup(super);
+}
+
 /* --------------------------------
  * InitPostgres
  *		Initialize POSTGRES.
@@ -943,6 +1027,14 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		/* pass the database name back to the caller */
 		if (out_dbname)
 			strcpy(out_dbname, dbname);
+
+        if (MyProcPort == NULL && IsDiskQuotaWorkerProcess())
+        {
+            MyProcPort = palloc(sizeof(Port));
+            MemSet(MyProcPort, 0, sizeof(Port));
+            MyProcPort->database_name = pstrdup(dbname);
+            MyProcPort->user_name = prepare_user_name(username);
+        }
 	}
 
 	/* Now we can mark our PGPROC entry with the database ID */
@@ -1066,7 +1158,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * the system while we startup.
 	 */
 	if ((Gp_role == GP_ROLE_UTILITY) && (Gp_session_role != GP_ROLE_UTILITY) &&
-		!IsAutoVacuumWorkerProcess())
+		!(IsAutoVacuumWorkerProcess()||IsDiskQuotaWorkerProcess()))
 	{
 		ereport(FATAL,
 				(errcode(ERRCODE_CANNOT_CONNECT_NOW),

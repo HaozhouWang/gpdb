@@ -1427,6 +1427,8 @@ calculate_table_disk_usage(void)
 			/* if table size is modified*/
 			int64 oldtotalsize = tsentry->totalsize;
 			tsentry->totalsize = calculate_total_relation_size_by_oid(relOid);
+            elog(LOG, "table size: %ld", (int64)tsentry->totalsize);
+
 			update_namespace_map(tsentry->namespaceoid, tsentry->totalsize - oldtotalsize);
 			update_role_map(tsentry->owneroid, tsentry->totalsize - oldtotalsize);
 		}
@@ -1526,6 +1528,7 @@ static bool check_table_is_active(Oid reloid)
 	{
 		elog(DEBUG1,"table is active with oid:%u", reloid);
 	}
+    found = true;
 	return found;
 }
 
@@ -1582,9 +1585,11 @@ refresh_disk_quota_model(void)
 
 	/* recalculate the disk usage of table, schema and role */
 	StartTransactionCommand();
+    PushActiveSnapshot(GetTransactionSnapshot());
 	calculate_table_disk_usage();
 	calculate_schema_disk_usage();
 	calculate_role_disk_usage();
+    PopActiveSnapshot();
 	CommitTransactionCommand();
 
 	flush_local_black_map();

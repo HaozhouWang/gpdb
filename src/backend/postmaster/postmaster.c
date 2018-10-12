@@ -1943,7 +1943,7 @@ ServerLoop(void)
 		}
 
 		/* If we have lost the disk quota launcher, try to start a new one */
-		if (DiskQuotaPID == 0 &&
+		if (DiskQuotaPID == 0 && Gp_entry_postmaster &&
 			(DiskQuotaingActive() || start_diskquota_launcher) &&
 			pmState == PM_RUN)
 		{
@@ -1982,7 +1982,7 @@ ServerLoop(void)
 		}
 
 		/* If we need to signal the diskquota launcher, do so now */
-		if (dqlauncher_needs_signal)
+		if (dqlauncher_needs_signal && Gp_entry_postmaster)
 		{
 			dqlauncher_needs_signal = false;
 			if (DiskQuotaPID != 0)
@@ -3132,7 +3132,7 @@ reaper(SIGNAL_ARGS)
 				AutoVacPID = StartAutoVacLauncher();
 			if (XLogArchivingActive() && PgArchPID == 0)
 				PgArchPID = pgarch_start();
-			if (DiskQuotaingActive() && DiskQuotaPID == 0)
+			if (Gp_entry_postmaster && DiskQuotaingActive() && DiskQuotaPID == 0)
 				DiskQuotaPID = StartDiskQuotaLauncher();
 			if (PgStatPID == 0)
 				PgStatPID = pgstat_start();
