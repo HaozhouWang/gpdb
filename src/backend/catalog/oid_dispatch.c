@@ -85,6 +85,7 @@
 #include "catalog/pg_conversion.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_default_acl.h"
+#include "catalog/pg_diskquota.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_extprotocol.h"
@@ -247,6 +248,13 @@ CreateKeyFromCatalogTuple(Relation catalogrel, HeapTuple tuple,
 				key.keyOid1 = daclForm->defaclrole;
 				key.namespaceOid = daclForm->defaclnamespace;
 				key.keyOid2 = (Oid) daclForm->defaclobjtype;
+				break;
+			}
+		case DiskQuotaRelationId:
+			{
+				Form_pg_diskquota conForm = (Form_pg_diskquota) GETSTRUCT(tuple);
+
+				key.objname = NameStr(conForm->quotaname);
 				break;
 			}
 		case EnumRelationId:

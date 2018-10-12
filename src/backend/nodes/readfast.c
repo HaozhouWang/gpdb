@@ -2893,6 +2893,30 @@ _readLockRows(void)
 	READ_DONE();
 }
 
+static CreateDiskQuotaStmt *
+_readCreateDiskQuotaStmt(void)
+{
+	READ_LOCALS(CreateDiskQuotaStmt);
+
+	READ_STRING_FIELD(quotaname);
+	READ_ENUM_FIELD(dbobjtype, DiskQuotaDBObjectType);
+	READ_NODE_FIELD(table);
+	READ_STRING_FIELD(objname);
+	READ_NODE_FIELD(options);
+
+	READ_DONE();
+}
+
+static DropDiskQuotaStmt *
+_readDropDiskQuotaStmt(void)
+{
+	READ_LOCALS(DropDiskQuotaStmt);
+
+	READ_STRING_FIELD(quotaname);
+	READ_BOOL_FIELD(missing_ok);
+
+	READ_DONE();
+}
 
 static Node *
 _readValue(NodeTag nt)
@@ -3819,7 +3843,12 @@ readNodeBinary(void)
 			case T_DistributedBy:
 				return_value = _readDistributedBy();
 				break;
-
+			case T_CreateDiskQuotaStmt:
+				return_value = _readCreateDiskQuotaStmt();
+				break;
+			case T_DropDiskQuotaStmt:
+				return_value = _readDropDiskQuotaStmt();
+				break;
 
 			default:
 				return_value = NULL; /* keep the compiler silent */

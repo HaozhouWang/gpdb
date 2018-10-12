@@ -15,9 +15,13 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/dependency.h"
+#include "catalog/oid_dispatch.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_diskquota.h"
+#include "cdb/cdbvars.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbdispatchresult.h"
 #include "commands/diskquotacmd.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
@@ -185,6 +189,12 @@ void CreateDiskQuota(CreateDiskQuotaStmt *stmt)
 			(errmsg("quota is not set in option"),
 			 errhint("Add quota='size' in option")));
 	}
+    if (Gp_role == GP_ROLE_DISPATCH)
+    {
+        CdbDispatchUtilityStatement((Node *) stmt,
+            DF_WITH_SNAPSHOT | DF_CANCEL_ON_ERROR | DF_NEED_TWO_PHASE,
+            GetAssignedOidsForDispatch(), NULL);
+    }
 
 	heap_close(disk_quota_rel, RowExclusiveLock);
 }
