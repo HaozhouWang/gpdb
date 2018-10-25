@@ -180,4 +180,16 @@ extern void BufferedAppendCompleteFile(
 extern void BufferedAppendFinish(
     BufferedAppend *bufferedAppend);
 
+typedef void (*DQAO_report_hook_type)(BufferedAppend *bufferedAppend);
+extern PGDLLIMPORT DQAO_report_hook_type dqao_report_hook;
+#define DQAO_REPORT_ACTIVE_RELATION(ba) do { \
+	if (dqao_report_hook) \
+		dqao_report_hook(ba); \
+} while(0)
+#define DQAO_REPORT_ACTIVE_RELATION_COND(cond, ba) do { \
+	if (dqao_report_hook && (cond)) \
+		dqao_report_hook(ba); \
+} while(0)
+
+
 #endif   /* CDBBUFFEREDAPPEND_H */

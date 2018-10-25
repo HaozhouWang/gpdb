@@ -23,6 +23,7 @@
 #include "cdb/cdbbufferedappend.h"
 #include "utils/guc.h"
 
+DQAO_report_hook_type dqao_report_hook = NULL;
 static void BufferedAppendWrite(
 					BufferedAppend *bufferedAppend);
 
@@ -195,6 +196,7 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend)
 		   bufferedAppend->filePathName,
 		   bufferedAppend->largeWritePosition,
 		   bytestotal);
+	DQAO_REPORT_ACTIVE_RELATION(bufferedAppend);
 
 	/*
 	 * Log each varblock to the XLog. Write to the file first, before
