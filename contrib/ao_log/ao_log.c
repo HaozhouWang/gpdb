@@ -10,9 +10,11 @@
  * -------------------------------------------------------------------------
  */
 #include "postgres.h"
-
+#include "fmgr.h"
 #include "cdb/cdbbufferedappend.h"
 #include "utils/elog.h"
+
+PG_MODULE_MAGIC;
 
 void	_PG_init(void);
 void	_PG_fini(void);
