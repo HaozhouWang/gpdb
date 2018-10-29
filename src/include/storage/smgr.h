@@ -147,4 +147,16 @@ extern Datum smgrin(PG_FUNCTION_ARGS);
 extern Datum smgreq(PG_FUNCTION_ARGS);
 extern Datum smgrne(PG_FUNCTION_ARGS);
 
+typedef void (*DQS_report_hook_type)(SMgrRelation sreln);
+extern PGDLLIMPORT DQS_report_hook_type dqs_report_hook;
+#define DQS_REPORT_ACTIVE_RELATION(sreln) do{ \
+			if (dqs_report_hook) \
+				dqs_report_hook(sreln); \
+		} while(0)
+#define DQS_REPORT_ACTIVE_RELATION_COND(cond, sreln) do { \
+			if (dqs_report_hook && (cond)) \
+				dqs_report_hook(sreln); \
+		} while(0)
+
+
 #endif   /* SMGR_H */

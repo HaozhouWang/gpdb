@@ -40,6 +40,8 @@ static HTAB *SMgrRelationHash = NULL;
 
 static SMgrRelation first_unowned_reln = NULL;
 
+DQS_report_hook_type dqs_report_hook = NULL;
+
 /* local function prototypes */
 static void smgrshutdown(int code, Datum arg);
 static void add_to_unowned_list(SMgrRelation reln);
@@ -343,6 +345,8 @@ smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
 							isRedo);
 
 	mdcreate(reln, forknum, isRedo);
+
+	DQS_REPORT_ACTIVE_RELATION(reln);
 }
 
 /*
@@ -591,6 +595,7 @@ smgrextend(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 		   char *buffer, bool skipFsync)
 {
 	mdextend(reln, forknum, blocknum, buffer, skipFsync);
+	DQS_REPORT_ACTIVE_RELATION(reln);
 }
 
 /*
@@ -680,6 +685,7 @@ smgrtruncate(SMgrRelation reln, ForkNumber forknum, BlockNumber nblocks)
 	 * Do the truncation.
 	 */
 	mdtruncate(reln, forknum, nblocks);
+	DQS_REPORT_ACTIVE_RELATION(reln);
 }
 
 /*
