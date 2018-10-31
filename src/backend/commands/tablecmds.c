@@ -1606,6 +1606,7 @@ ExecuteTruncate(TruncateStmt *stmt)
 			heap_close(rel, AccessExclusiveLock);
 			continue;
 		}
+		SAVE_TABLE_OID(myrelid);
 		truncate_check_rel(rel);
 		rels = lappend(rels, rel);
 		relids = lappend_oid(relids, myrelid);
@@ -1779,6 +1780,7 @@ ExecuteTruncate(TruncateStmt *stmt)
 		Relation	rel = (Relation) lfirst(cell);
 
 		Assert(CheckExclusiveAccess(rel));
+		SAVE_TABLE_OID(RelationGetRelid(rel));
 
 		/*
 		 * Normally, we need a transaction-safe truncation here.  However, if

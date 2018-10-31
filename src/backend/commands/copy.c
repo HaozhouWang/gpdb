@@ -3428,6 +3428,7 @@ CopyFrom(CopyState cstate)
 	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
 	estate->es_result_partitions = cstate->partitions;
+	SAVE_TABLE_OID(resultRelInfo->ri_RelationDesc->rd_id);
 
 	CopyInitPartitioningState(estate);
 

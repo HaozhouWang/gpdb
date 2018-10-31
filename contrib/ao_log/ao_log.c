@@ -28,7 +28,7 @@ static void
 report_smgr(SMgrRelation sreln)
 {
 	RelFileNode *node = &sreln->smgr_rnode.node;
-	elog(LOG, "smgr active relation: (%d, %d, %d)", node->dbNode, node->spcNode, node->relNode);
+	elog(LOG, "smgr active relation: (%d, %d, %d) %d", node->dbNode, node->spcNode, node->relNode, table_oid);
     report_active_table_helper(&sreln->smgr_rnode);
 }
 
@@ -36,7 +36,7 @@ static void
 report_ao(BufferedAppend *ba)
 {
 	RelFileNode *node = &ba->relFileNode.node;
-	elog(LOG, "ao active relation: (%d, %d, %d)", node->dbNode, node->spcNode, node->relNode);
+	elog(LOG, "ao active relation: (%d, %d, %d) %d", node->dbNode, node->spcNode, node->relNode, table_oid);
 
 	report_active_table_helper(&ba->relFileNode);
 }

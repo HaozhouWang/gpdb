@@ -1729,6 +1729,7 @@ ExecModifyTable(ModifyTableState *node)
 				slot = ExecFilterJunk(junkfilter, slot);
 		}
 
+		SAVE_TABLE_OID(resultRelInfo->ri_RelationDesc->rd_id);
 		switch (operation)
 		{
 			case CMD_INSERT:
