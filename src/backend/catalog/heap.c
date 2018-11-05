@@ -318,6 +318,7 @@ heap_create(const char *relname,
 						get_namespace_name(relnamespace), relname),
 		errdetail("System catalog modifications are currently disallowed.")));
 
+	SAVE_TABLE_OID(relid);
 	/*
 	 * Decide if we need storage or not, and handle a couple other special
 	 * cases for particular relkinds.
