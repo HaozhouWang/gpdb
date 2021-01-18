@@ -145,7 +145,7 @@ typedef void (*file_write_hook_type)(SMgrRelation reln, ForkNumber forknum, Bloc
 		  								char *buffer, bool skipFsync);
 extern PGDLLIMPORT file_write_hook_type file_write_hook;
 
-typedef void (*file_prefetch_hook_type)(MgrRelation reln, ForkNumber forknum, BlockNumber blocknum);
+typedef void (*file_prefetch_hook_type)(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum);
 extern PGDLLIMPORT file_prefetch_hook_type file_prefetch_hook;
 
 typedef void (*file_truncate_hook_type)(SMgrRelation reln, ForkNumber forknum, BlockNumber nblocks);
