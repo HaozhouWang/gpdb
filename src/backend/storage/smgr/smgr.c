@@ -48,10 +48,8 @@ file_create_ao_hook_type file_create_ao_hook = NULL;
 file_writeback_hook_type file_writeback_hook = NULL;
 file_write_hook_type file_write_hook = NULL;
 file_prefetch_hook_type file_prefetch_hook = NULL;
-file_truncate_hook_type file_truncate_hook = NULL;
 file_read_hook_type file_read_hook = NULL;
 file_immedsync_hook_type file_immedsync_hook = NULL;
-file_extend_ao_hook_type file_extend_ao_hook = NULL;
 
 typedef struct f_smgr
 {
