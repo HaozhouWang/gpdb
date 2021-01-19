@@ -53,7 +53,7 @@ static void standard_TruncateAOSegmentFile(File fd, Relation rel,
 static void standard_mdunlink_ao(RelFileNodeBackend rnode,
 								ForkNumber forkNumber, bool isRedo);
 static void standard_copy_append_only_data(RelFileNode src, RelFileNode dst,
-        									BackendId backendid, char relpersistence)
+        									BackendId backendid, char relpersistence);
 
 
 ao_file_unlink_hook_type ao_file_unlink_hook = NULL;
