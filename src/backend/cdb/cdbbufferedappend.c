@@ -156,11 +156,14 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 	{
 		int32		byteswritten;
 
-		byteswritten = FileWrite(bufferedAppend->file,
-								 (char *) largeWriteMemory + bytestotal,
-								 bytesleft,
-								 bufferedAppend->largeWritePosition + bytestotal,
-								 WAIT_EVENT_DATA_FILE_WRITE);
+		if (file_extend_ao_hook)
+			byteswritten = (*file_extend_ao_hook)(bufferedAppend);
+		else
+			byteswritten = FileWrite(bufferedAppend->file,
+									 (char *) largeWriteMemory + bytestotal,
+									 bytesleft,
+									 bufferedAppend->largeWritePosition + bytestotal,
+									 WAIT_EVENT_DATA_FILE_WRITE);
 		if (byteswritten < 0)
 			ereport(ERROR,
 					(errcode_for_file_access(),
@@ -170,9 +173,6 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 
 		bytesleft -= byteswritten;
 		bytestotal += byteswritten;
-
-		if (file_extend_hook)
-			(*file_extend_hook)(bufferedAppend->relFileNode);
 	}
 
 	elogif(Debug_appendonly_print_append_block, LOG,
