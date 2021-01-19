@@ -45,9 +45,9 @@ static void mdunlink_ao_base_relfile(void *ctx);
 static bool mdunlink_ao_perFile(const int segno, void *ctx);
 static bool copy_append_only_data_perFile(const int segno, void *ctx);
 static bool truncate_ao_perFile(const int segno, void *ctx);
+
 static File standard_OpenAOSegmentFile(Relation rel, char *filepathname, 
 				  						int64	logicalEof);
-										  static void
 static void standard_TruncateAOSegmentFile(File fd, Relation rel,
 											int32 segFileNum, int64 offset);
 static void standard_mdunlink_ao(RelFileNodeBackend rnode,
