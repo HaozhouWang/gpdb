@@ -158,7 +158,4 @@ extern PGDLLIMPORT file_read_hook_type file_read_hook;
 typedef void (*file_immedsync_hook_type)(SMgrRelation reln, ForkNumber forknum);
 extern PGDLLIMPORT file_immedsync_hook_type file_immedsync_hook;
 
-typedef int32 (*file_extend_ao_hook_type)(BufferedAppend *bufferedAppend);
-extern PGDLLIMPORT file_extend_ao_hook_type file_extend_ao_hook;
-
 #endif							/* SMGR_H */

@@ -19,6 +19,7 @@
 
 #include <unistd.h>				/* for write() */
 
+#include "access/aomd.h"
 #include "cdb/cdbappendonlyxlog.h"
 #include "cdb/cdbbufferedappend.h"
 #include "pgstat.h"
