@@ -81,7 +81,4 @@ typedef void (*ao_file_copy_hook_type)(RelFileNode src, RelFileNode dst, Backend
 										char relpersistence);
 extern PGDLLIMPORT ao_file_copy_hook_type ao_file_copy_hook;
 
-typedef int32 (*file_extend_ao_hook_type)(BufferedAppend *bufferedAppend);
-extern PGDLLIMPORT file_extend_ao_hook_type file_extend_ao_hook;
-
 #endif							/* AOMD_H */

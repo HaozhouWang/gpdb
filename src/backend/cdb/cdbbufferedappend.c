@@ -157,8 +157,8 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 	{
 		int32		byteswritten;
 
-		if (file_extend_ao_hook)
-			byteswritten = (*file_extend_ao_hook)(bufferedAppend);
+		if (ao_buffered_append_hook)
+			byteswritten = (*ao_buffered_append_hook)(bufferedAppend);
 		else
 			byteswritten = FileWrite(bufferedAppend->file,
 									 (char *) largeWriteMemory + bytestotal,
