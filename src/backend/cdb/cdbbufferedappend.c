@@ -29,6 +29,8 @@ static void BufferedAppendWrite(
 					BufferedAppend *bufferedAppend,
 					bool needsWAL);
 
+ao_buffered_append_hook_type ao_buffered_append_hook = NULL;
+
 /*
  * Determines the amount of memory to supply for
  * BufferedAppend given the desired buffer and
