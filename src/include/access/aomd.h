@@ -74,7 +74,7 @@ extern PGDLLIMPORT ao_file_unlink_hook_type ao_file_unlink_hook;
 typedef void (*ao_file_truncate_hook_type)(File fd, Relation rel, int32 segmentFileNum, int64 offset);
 extern PGDLLIMPORT ao_file_truncate_hook_type ao_file_truncate_hook;
 
-typedef void (*ao_file_open_hook_type)(Relation rel, char *filepathname, int64	logicalEof);
+typedef File (*ao_file_open_hook_type)(Relation rel, char *filepathname, int64	logicalEof);
 extern PGDLLIMPORT ao_file_open_hook_type ao_file_open_hook;
 
 typedef void (*ao_file_copy_hook_type)(RelFileNode src, RelFileNode dst, BackendId backendid,

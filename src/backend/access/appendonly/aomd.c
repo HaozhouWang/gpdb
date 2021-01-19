@@ -45,6 +45,16 @@ static void mdunlink_ao_base_relfile(void *ctx);
 static bool mdunlink_ao_perFile(const int segno, void *ctx);
 static bool copy_append_only_data_perFile(const int segno, void *ctx);
 static bool truncate_ao_perFile(const int segno, void *ctx);
+static File standard_OpenAOSegmentFile(Relation rel, char *filepathname, 
+				  						int64	logicalEof);
+										  static void
+static void standard_TruncateAOSegmentFile(File fd, Relation rel,
+											int32 segFileNum, int64 offset);
+static void standard_mdunlink_ao(RelFileNodeBackend rnode,
+								ForkNumber forkNumber, bool isRedo);
+static void standard_copy_append_only_data(RelFileNode src, RelFileNode dst,
+        									BackendId backendid, char relpersistence)
+
 
 ao_file_unlink_hook_type ao_file_unlink_hook = NULL;
 ao_file_truncate_hook_type ao_file_truncate_hook = NULL;
@@ -229,14 +239,6 @@ standard_TruncateAOSegmentFile(File fd, Relation rel, int32 segFileNum, int64 of
 					    relname)));
 	if (RelationNeedsWAL(rel))
 		xlog_ao_truncate(rel->rd_node, segFileNum, offset);
-
-	if (file_truncate_hook)
-	{
-		RelFileNodeBackend rnode;
-		rnode.node = rel->rd_node;
-		rnode.backend = rel->rd_backend;
-		(*file_truncate_hook)(rnode);
-	}
 }
 
 struct mdunlink_ao_callback_ctx
@@ -507,7 +509,7 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
  * Like copy_relation_data(), but for AO tables.
  *
  */
-void
+static void
 standard_copy_append_only_data(RelFileNode src, RelFileNode dst,
         BackendId backendid, char relpersistence)
 {
