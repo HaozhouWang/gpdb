@@ -156,7 +156,7 @@ BufferedReadSetFile(
 			bufferedRead->largeReadLen = (int32) fileLen;
 
 		if (ao_buffered_read_hook)
-			(*ao_buffered_append_hook)(bufferedRead);
+			(*ao_buffered_read_hook)(bufferedRead);
 		else
 			BufferedReadIo(bufferedRead);
 	}
@@ -310,7 +310,7 @@ BufferedReadUseBeforeBuffer(
 	}
 
 	if (ao_buffered_read_hook)
-		(*ao_buffered_append_hook)(bufferedRead);
+		(*ao_buffered_read_hook)(bufferedRead);
 	else
 		BufferedReadIo(bufferedRead);
 
@@ -426,7 +426,7 @@ BufferedReadSetTemporaryRange(
 
 		if (bufferedRead->largeReadLen > 0)
 			if (ao_buffered_read_hook)
-				(*ao_buffered_append_hook)(bufferedRead);
+				(*ao_buffered_read_hook)(bufferedRead);
 			else
 				BufferedReadIo(bufferedRead);
 	}
@@ -532,7 +532,7 @@ BufferedReadGetNextBuffer(
 		}
 
 		if (ao_buffered_read_hook)
-			(*ao_buffered_append_hook)(bufferedRead);
+			(*ao_buffered_read_hook)(bufferedRead);
 		else
 			BufferedReadIo(bufferedRead);
 
