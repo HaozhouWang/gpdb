@@ -141,7 +141,7 @@ typedef void (*file_writeback_hook_type)(SMgrRelation reln, ForkNumber forknum, 
 			  						BlockNumber nblocks);
 extern PGDLLIMPORT file_writeback_hook_type file_writeback_hook;
 
-typedef void (*file_write_hook_type)((SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
+typedef void (*file_write_hook_type)(SMgrRelation reln, ForkNumber forknum, BlockNumber blocknum,
 										char *buffer, bool skipFsync));
 extern PGDLLIMPORT file_write_hook_type file_write_hook;
 
