@@ -425,10 +425,12 @@ BufferedReadSetTemporaryRange(
 		bufferedRead->largeReadPosition = beginFileOffset;
 
 		if (bufferedRead->largeReadLen > 0)
+		{
 			if (ao_buffered_read_hook)
 				(*ao_buffered_read_hook)(bufferedRead);
 			else
 				BufferedReadIo(bufferedRead);
+		}
 	}
 
 	bufferedRead->haveTemporaryLimitInEffect = true;
