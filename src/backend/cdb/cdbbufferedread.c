@@ -29,6 +29,8 @@ static uint8 *BufferedReadUseBeforeBuffer(
 							int32 *nextBufferLen);
 
 
+ao_buffered_read_hook_type ao_buffered_read_hook = NULL;
+
 /*
  * Determines the amount of memory to supply for
  * BufferedRead given the desired buffer and
@@ -152,7 +154,11 @@ BufferedReadSetFile(
 			bufferedRead->largeReadLen = bufferedRead->maxLargeReadLen;
 		else
 			bufferedRead->largeReadLen = (int32) fileLen;
-		BufferedReadIo(bufferedRead);
+
+		if (ao_buffered_read_hook)
+			(*ao_buffered_append_hook)(bufferedRead);
+		else
+			BufferedReadIo(bufferedRead);
 	}
 }
 
@@ -303,7 +309,10 @@ BufferedReadUseBeforeBuffer(
 							   remainingFileLen, inEffectFileLen, nextPosition)));
 	}
 
-	BufferedReadIo(bufferedRead);
+	if (ao_buffered_read_hook)
+		(*ao_buffered_append_hook)(bufferedRead);
+	else
+		BufferedReadIo(bufferedRead);
 
 	extraLen = maxReadAheadLen - beforeLen;
 	Assert(extraLen > 0);
@@ -416,7 +425,10 @@ BufferedReadSetTemporaryRange(
 		bufferedRead->largeReadPosition = beginFileOffset;
 
 		if (bufferedRead->largeReadLen > 0)
-			BufferedReadIo(bufferedRead);
+			if (ao_buffered_read_hook)
+				(*ao_buffered_append_hook)(bufferedRead);
+			else
+				BufferedReadIo(bufferedRead);
 	}
 
 	bufferedRead->haveTemporaryLimitInEffect = true;
@@ -519,7 +531,10 @@ BufferedReadGetNextBuffer(
 			return NULL;
 		}
 
-		BufferedReadIo(bufferedRead);
+		if (ao_buffered_read_hook)
+			(*ao_buffered_append_hook)(bufferedRead);
+		else
+			BufferedReadIo(bufferedRead);
 
 		if (maxReadAheadLen > bufferedRead->largeReadLen)
 			bufferedRead->bufferLen = bufferedRead->largeReadLen;

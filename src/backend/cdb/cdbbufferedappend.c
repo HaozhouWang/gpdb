@@ -159,14 +159,11 @@ BufferedAppendWrite(BufferedAppend *bufferedAppend, bool needsWAL)
 	{
 		int32		byteswritten;
 
-		if (ao_buffered_append_hook)
-			byteswritten = (*ao_buffered_append_hook)(bufferedAppend);
-		else
-			byteswritten = FileWrite(bufferedAppend->file,
-									 (char *) largeWriteMemory + bytestotal,
-									 bytesleft,
-									 bufferedAppend->largeWritePosition + bytestotal,
-									 WAIT_EVENT_DATA_FILE_WRITE);
+		byteswritten = FileWrite(bufferedAppend->file,
+								 (char *) largeWriteMemory + bytestotal,
+								 bytesleft,
+								 bufferedAppend->largeWritePosition + bytestotal,
+								 WAIT_EVENT_DATA_FILE_WRITE);
 		if (byteswritten < 0)
 			ereport(ERROR,
 					(errcode_for_file_access(),
@@ -331,7 +328,10 @@ BufferedAppendFinishBuffer(BufferedAppend *bufferedAppend,
 		 * Current large-write memory is full.
 		 */
 		bufferedAppend->largeWriteLen = bufferedAppend->maxLargeWriteLen;
-		BufferedAppendWrite(bufferedAppend, needsWAL);
+		if (ao_buffered_append_hook)
+			(*ao_buffered_append_hook)(bufferedAppend, needsWAL);
+		else
+			BufferedAppendWrite(bufferedAppend, needsWAL);
 
 		if (newLen > bufferedAppend->maxLargeWriteLen)
 		{
@@ -390,7 +390,10 @@ BufferedAppendCompleteFile(BufferedAppend *bufferedAppend,
 	Assert(bufferedAppend->file >= 0);
 
 	if (bufferedAppend->largeWriteLen > 0)
-		BufferedAppendWrite(bufferedAppend, needsWAL);
+		if (ao_buffered_append_hook)
+			(*ao_buffered_append_hook)(bufferedAppend, needsWAL);
+		else
+			BufferedAppendWrite(bufferedAppend, needsWAL);
 
 	*fileLen = bufferedAppend->fileLen;
 	*fileLen_uncompressed = bufferedAppend->fileLen_uncompressed;
